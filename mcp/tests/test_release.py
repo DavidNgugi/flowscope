@@ -15,6 +15,11 @@ from pathlib import Path
 import pytest
 import yaml
 
+try:  # tomllib is stdlib from Python 3.11; the package supports 3.10.
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - exercised on the 3.10 job
+    import tomli as tomllib
+
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parent
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
@@ -324,7 +329,6 @@ def _run_commands(workflow_or_action: dict) -> list[tuple[str, str]]:
 
 
 def _declared_dev_requirements() -> set[str]:
-    import tomllib
 
     pyproject = tomllib.loads((PACKAGE_ROOT / "pyproject.toml").read_text())
     names = set()

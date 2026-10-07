@@ -47,6 +47,9 @@ dev = [
   # Builds the wheel and sdist. Declared here rather than installed ad hoc so
   # the local workflow and the CI composite action run identical commands.
   "build>=1.2",
+  # `tomllib` is stdlib only from 3.11, and the tests parse pyproject.toml to
+  # verify the declared dev dependencies.
+  "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.urls]

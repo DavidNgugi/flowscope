@@ -14,6 +14,11 @@ from pathlib import Path
 
 import pytest
 
+try:  # tomllib is stdlib from Python 3.11; the package supports 3.10.
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - exercised on the 3.10 job
+    import tomli as tomllib
+
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parent
 
@@ -406,7 +411,6 @@ def test_uvx_invocations_use_the_real_distribution_name() -> None:
     assert "uvx flowscope-mcp" in text, "the bare `uvx flowscope-mcp` route should be documented"
 
     # And the console-script name must match the distribution so that bare form works.
-    import tomllib
 
     pyproject = tomllib.loads((PACKAGE_ROOT / "pyproject.toml").read_text())
     project = pyproject["project"]
