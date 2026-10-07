@@ -1,0 +1,65 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+# Build/packaging output. `build/` and `.ruff_cache/` also cover any depth,
+# because a bare name pattern matches at every level.
+build/
+*.egg-info/
+
+# Python (MCP server package)
+mcp/.venv/
+mcp/**/__pycache__/
+mcp/build/
+mcp/dist/
+mcp/.pytest_cache/
+# `uv sync`/`uv run` in this directory are for local development only;
+# pyproject.toml is the single source of truth, and `mcp/` ships to PyPI rather
+# than being deployed as an application.
+mcp/uv.lock
+# A wheel or an MCP Bundle built by hand, outside dist/.
+*.whl
+*.mcpb
+# Written by `flowscope-mcp-install` during local testing; it pins this
+# machine's interpreter path, so it must never be committed.
+mcp/.vscode/
+mcp/.cursor/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+mcp/htmlcov/
+
+# Data / media (large, regenerable)
+backend/data/db.sqlite3
+backend/data/db.sqlite3-*
+backend/data/media/
+
+# Env
+backend/.env
+secrets/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Documentation fetches pulled down while researching; regenerable scratch.
+.mcp-docs/
+
+output/
+
+tmp/
+
+data/
+
+# Research notes kept locally as provenance for design decisions. Working notes
+# rather than documentation, so they stay out of the published repo. The
+# user-facing docs in mcp/docs/ are tracked and linked from the READMEs.
+/docs/research/

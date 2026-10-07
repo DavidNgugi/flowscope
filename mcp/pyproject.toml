@@ -1,0 +1,105 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flowscope-mcp"
+version = "0.1.0"
+description = "MCP server for FlowScope: turn YouTube product demos into structured UX flow reports for any LLM client."
+readme = "README.md"
+license = { text = "MIT" }
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+keywords = ["mcp", "model-context-protocol", "ux-research", "flowscope", "youtube", "llm", "agent"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: User Interfaces",
+  "Typing :: Typed",
+]
+dependencies = [
+  # Protocol 2026-07-28 era SDK; it owns the transport, schema validation and
+  # version negotiation. v2 renamed FastMCP -> MCPServer and uses httpx2.
+  "mcp>=2.3,<3",
+  "httpx2>=2.10,<3",
+  "pydantic>=2.12,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  # anyio's pytest plugin runs async fixtures and the test body in the same
+  # task. pytest-asyncio does not, which breaks the anyio cancel scope inside
+  # the MCP SDK's in-memory transport at teardown.
+  "anyio>=4.9",
+  # scripts/validate_metadata.py checks server.json against the official
+  # registry schema; the schema check is skipped with a warning without it.
+  "jsonschema>=4.20",
+  # tests parse the workflow YAML to pin the release triggers.
+  "pyyaml>=6.0",
+  "ruff>=0.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/DavidNgugi/flowscope"
+Repository = "https://github.com/DavidNgugi/flowscope"
+Issues = "https://github.com/DavidNgugi/flowscope/issues"
+
+[project.scripts]
+flowscope-mcp = "flowscope_mcp.__main__:main"
+flowscope-mcp-install = "flowscope_mcp.install_cli:main"
+
+# Lets clients that launch via `uvx --from git+...` or a module path find the
+# entry point without installing the script.
+[tool.hatch.build.targets.wheel]
+packages = ["src/flowscope_mcp"]
+
+# The skills, plugin manifest and MCP server declaration ship inside the wheel
+# as well as in the source tree. They are data, not importable code, but a
+# client that installs this package from a git URL then gets the whole plugin in
+# one step instead of also having to clone the repository.
+[tool.hatch.build.targets.wheel.force-include]
+"skills" = "flowscope_mcp/plugin/skills"
+".claude-plugin" = "flowscope_mcp/plugin/.claude-plugin"
+".mcp.json" = "flowscope_mcp/plugin/.mcp.json"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/tests",
+  "/skills",
+  "/.claude-plugin",
+  "/.mcp.json",
+  "/README.md",
+  "/pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+# Line length is not enforced: the comments in this package are deliberately
+# prose, and wrapping them to 88 columns would hurt more than it helps.
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+  "F",    # pyflakes: undefined names, unused imports — the bugs that matter
+  "I",    # import sorting
+  "UP",   # pyupgrade
+  "B",    # bugbear: likely-mistaken constructs
+  "ISC",  # implicit string concatenation
+]
+ignore = [
+  # FastAPI-style handlers legitimately need many arguments, and the tool
+  # signatures are the model-facing contract.
+  "B008",
+]

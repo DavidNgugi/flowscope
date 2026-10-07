@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "flowscope",
+  "description": "FlowScope: turn recorded product demos into structured UX flow reports. Ships the FlowScope MCP server plus skills for tearing down and comparing product walkthroughs.",
+  "version": "0.1.0",
+  "owner": {
+    "name": "David Ngugi",
+    "url": "https://github.com/DavidNgugi/flowscope"
+  },
+  "plugins": [
+    {
+      "name": "flowscope",
+      "source": "./mcp",
+      "description": "Analyse YouTube product demos into structured UX reports, and compare several demos side by side. Bundles the FlowScope MCP server with two skills covering teardown and comparison.",
+      "category": "research",
+      "tags": ["ux", "research", "video", "product-demo", "competitive-analysis"],
+      "strict": true
+    }
+  ]
+}

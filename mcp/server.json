@@ -1,0 +1,55 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.DavidNgugi/flowscope",
+  "title": "FlowScope UX Flow Analyser",
+  "description": "Turn YouTube product demos into structured UX flow reports, and compare demos side by side.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/DavidNgugi/flowscope",
+    "source": "github",
+    "subfolder": "mcp"
+  },
+  "websiteUrl": "https://github.com/DavidNgugi/flowscope",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "flowscope-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "FLOWSCOPE_API_URL",
+          "description": "Base URL of the running FlowScope backend. '/api' is appended if absent.",
+          "format": "string",
+          "isRequired": false,
+          "default": "http://127.0.0.1:8000"
+        },
+        {
+          "name": "FLOWSCOPE_API_TOKEN",
+          "description": "Bearer token, only needed when the backend sits behind an authenticating proxy.",
+          "format": "string",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "FLOWSCOPE_MAX_WAIT",
+          "description": "Default seconds that flowscope_analyze_video waits for a job before returning a job id.",
+          "format": "number",
+          "isRequired": false,
+          "default": "900"
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "categories": ["research", "ux", "video"],
+      "requiresLocalService": true,
+      "notes": "Requires a running FlowScope backend plus ffmpeg and an LLM provider key on the backend host. Not a hosted service."
+    }
+  }
+}

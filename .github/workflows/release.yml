@@ -1,0 +1,244 @@
+name: Release MCP server
+
+# Two ways to release, both deliberate:
+#
+#   * Push a version tag (v0.2.0)      -> fully automatic.
+#   * Actions -> Release MCP server    -> type a version, optionally also publish.
+#
+# Nothing here runs on a branch push or a merge, so a release is never a side
+# effect of ordinary work.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the leading v (e.g. 0.2.0). Leave blank to use the version already in the files."
+        type: string
+        required: false
+      ref:
+        description: "Git ref to release from. Defaults to the branch you dispatched from."
+        type: string
+        required: false
+      publish:
+        description: "Actually publish. Leave false to run every check and build the artifacts only."
+        type: boolean
+        default: false
+
+# Only one release at a time: two runs racing on the same version would both
+# pass the "does this version already exist?" check and both try to upload.
+concurrency:
+  group: release-mcp
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare and verify the release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+      will_publish: ${{ steps.version.outputs.will_publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          # Tags must be present for the "tag matches version" check and for the
+          # tag that `git describe --exact-match` relies on.
+          fetch-depth: 0
+
+      - name: Apply the requested version
+        if: inputs.version != ''
+        working-directory: mcp
+        run: |
+          python scripts/version.py bump "${{ inputs.version }}"
+          echo "Bumped the working tree to ${{ inputs.version }}. This is not committed;"
+          echo "the artifacts below carry it, and you should commit it yourself."
+
+      - name: Resolve the release version
+        id: version
+        working-directory: mcp
+        run: |
+          # Read the single source of truth directly rather than parsing the
+          # human-readable `show` output, which is formatted for people.
+          version="$(python -c "
+          import re, pathlib
+          text = pathlib.Path('pyproject.toml').read_text()
+          print(re.search(r'^version = \"([^\"]+)\"', text, re.M).group(1))
+          ")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${version}"
+
+          # The tag is only known when the trigger was a tag push.
+          tag="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+          # Prerelease classification lives in version.py so the tag prefix, the
+          # workflow, and the script's own validation cannot disagree.
+          echo "is_prerelease=$(python scripts/version.py prerelease)" >> "$GITHUB_OUTPUT"
+
+          # A tag push always publishes. A manual run only publishes when asked,
+          # so the default manual behaviour is a safe dry run.
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.publish }}" = "true" ]; then
+            echo "will_publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "will_publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # On a tag push this also asserts that the tag and the files agree, which
+      # is the mistake that otherwise burns a version number on PyPI.
+      - name: Check version consistency
+        working-directory: mcp
+        run: python scripts/version.py check
+
+      - name: Refuse to release a version that already exists on PyPI
+        if: steps.version.outputs.will_publish == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # PyPI never allows reusing a version. Better to stop here with a clear
+          # message than to fail inside the uploader.
+          code="$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/flowscope-mcp/${VERSION}/json")"
+          if [ "$code" = "200" ]; then
+            echo "::error::flowscope-mcp ${VERSION} is already published on PyPI. PyPI does not allow reusing a version; bump to a new one."
+            exit 1
+          fi
+          echo "flowscope-mcp ${VERSION} is not on PyPI yet (HTTP ${code})."
+
+      - uses: ./.github/actions/verify-mcp
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: mcp/dist/
+          if-no-files-found: error
+
+  # Split from `prepare` so a PyPI upload cannot be undone by a later failure,
+  # and so the registry step can be retried without re-uploading to PyPI.
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.will_publish == 'true'
+    environment:
+      name: release
+      url: https://pypi.org/project/flowscope-mcp/
+    permissions:
+      # Trusted publishing: no long-lived PyPI token is stored in the repo.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: astral-sh/setup-uv@v5
+      - name: Publish
+        run: uv publish --trusted-publishing always dist/*
+
+  publish-registry:
+    name: Publish to the MCP Registry
+    runs-on: ubuntu-latest
+    needs: [prepare, publish-pypi]
+    if: needs.prepare.outputs.will_publish == 'true'
+    permissions:
+      # The registry verifies the io.github.* namespace via GitHub OIDC.
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+          sudo mv mcp-publisher /usr/local/bin/
+
+      # The registry proves package ownership by finding "mcp-name: <name>" in
+      # the published PyPI README, so PyPI must be live and propagated first.
+      - name: Wait for the PyPI release to be visible
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          for attempt in $(seq 1 30); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/flowscope-mcp/${VERSION}/json")"
+            if [ "$code" = "200" ]; then
+              echo "PyPI has ${VERSION}."
+              exit 0
+            fi
+            echo "attempt ${attempt}: PyPI returned ${code}; retrying in 10s"
+            sleep 10
+          done
+          echo "::error::PyPI did not serve flowscope-mcp ${VERSION} within 5 minutes."
+          exit 1
+
+      # The registry is in preview, so its availability should not fail the
+      # release or force a re-tag. PyPI publishing has already succeeded.
+      - name: Publish to the registry
+        continue-on-error: true
+        working-directory: mcp
+        run: |
+          mcp-publisher login github-oidc
+          # `validate` prints field-level 422s but its --help is broken in the
+          # current release, so failure here is not treated as fatal.
+          mcp-publisher validate || true
+          mcp-publisher publish
+
+      - name: Confirm the registry entry
+        continue-on-error: true
+        run: |
+          curl -fsSL "https://registry.modelcontextprotocol.io/v0.1/servers?search=flowscope" || true
+
+  github-release:
+    name: Create the GitHub release
+    runs-on: ubuntu-latest
+    needs: [prepare, publish-pypi]
+    if: needs.prepare.outputs.will_publish == 'true'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+        run: |
+          # A manual dispatch from a branch has no tag. Create one at the
+          # released commit so the version is anchored to a real revision.
+          if [ -z "${TAG}" ]; then
+            TAG="v${VERSION}"
+            git tag -a "${TAG}" -m "v${VERSION}"
+            git push origin "${TAG}"
+          fi
+
+          # A tag push by itself creates no release, so this normally creates
+          # one. If a release already exists (for example it was drafted in the
+          # UI and published), attach the artifacts to it instead.
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" dist/* --clobber
+          else
+            flags=(--title "flowscope-mcp v${VERSION}" --generate-notes)
+            if [ "${PRERELEASE}" = "true" ]; then
+              flags+=(--prerelease)
+            fi
+            gh release create "${TAG}" dist/* "${flags[@]}"
+          fi

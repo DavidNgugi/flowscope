@@ -1,0 +1,33 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Overrides .env: the cookie lives at a container path here and at a host
+      # path for a local `uvicorn` run, so the two setups do not fight over one
+      # setting.
+      YTDLP_COOKIE_FILE: /app/secrets/youtube-cookies.txt
+    volumes:
+      # Data lives on the host so it survives rebuilds, can be inspected
+      # directly, and is shared with a local `uvicorn` run. The previously used
+      # named volume is still declared below and left untouched; switch the line
+      # back to `backend_data:/app/data` to return to it.
+      - ./backend/data:/app/data
+      - ./secrets/youtube-cookies.txt:/app/secrets/youtube-cookies.txt
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5180:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  # Unused while the bind mount above is active. Kept so an existing volume's
+  # data is not orphaned or silently deleted.
+  backend_data:

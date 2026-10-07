@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "flowscope": {
+      "command": "uvx",
+      "args": ["--from", "${CLAUDE_PLUGIN_ROOT}", "flowscope-mcp"],
+      "env": {
+        "FLOWSCOPE_API_URL": "${FLOWSCOPE_API_URL}"
+      }
+    }
+  }
+}

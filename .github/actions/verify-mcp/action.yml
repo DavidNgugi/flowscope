@@ -1,0 +1,83 @@
+name: Verify the MCP server
+description: >
+  Run every check that must pass before the MCP server is published: version
+  consistency, lint, tests, skill frontmatter, the registry schema, the plugin
+  manifests, and a wheel build whose contents are inspected.
+
+  The release workflow calls this too, so a tag cannot publish something that
+  would have failed CI.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+        cache: pip
+        cache-dependency-path: mcp/pyproject.toml
+
+    - name: Install the package and its dev dependencies
+      shell: bash
+      working-directory: mcp
+      run: pip install -e ".[dev]"
+
+    # The six declaration sites must agree, and on a tag the tag must agree too.
+    # Failing here costs nothing; failing after a PyPI upload burns the version
+    # number permanently, because PyPI never allows reuse.
+    - name: Check that every declared version agrees
+      shell: bash
+      working-directory: mcp
+      run: python scripts/version.py check
+
+    - name: Lint
+      shell: bash
+      working-directory: mcp
+      # Lint only, not `ruff format`: the prose comments are wrapped by hand.
+      run: ruff check src tests scripts
+
+    - name: Test
+      shell: bash
+      working-directory: mcp
+      run: pytest -q
+
+    - name: Install the Agent Skills reference validator
+      shell: bash
+      run: |
+        pip install "git+https://github.com/agentskills/agentskills.git#subdirectory=skills-ref"
+
+    - name: Validate skills
+      shell: bash
+      working-directory: mcp
+      run: |
+        for skill in skills/*/; do
+          echo "validating $skill"
+          skills-ref validate "$skill"
+        done
+
+    - name: Validate server.json and the README ownership marker
+      shell: bash
+      working-directory: mcp
+      run: python scripts/validate_metadata.py --skip-wheel
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+
+    # --strict turns unrecognized fields and missing metadata into failures.
+    # The validator's coverage is version-gated: it does not check SKILL.md
+    # frontmatter on older builds, which is why skills-ref runs as well.
+    - name: Validate plugin manifests
+      shell: bash
+      run: |
+        npx --yes @anthropic-ai/claude-code@latest plugin validate . --strict
+        npx --yes @anthropic-ai/claude-code@latest plugin validate ./mcp --strict
+
+    - name: Build the wheel and sdist
+      shell: bash
+      working-directory: mcp
+      run: python -m build
+
+    - name: Check the wheel ships the skills and manifests
+      shell: bash
+      working-directory: mcp
+      run: python scripts/validate_metadata.py --dist-dir dist
