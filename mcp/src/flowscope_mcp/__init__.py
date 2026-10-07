@@ -9,6 +9,6 @@ this server can run from `uvx` in a different virtualenv from the backend and
 never pins the backend's heavy dependencies (ffmpeg bindings, whisper, torch).
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = ["__version__"]

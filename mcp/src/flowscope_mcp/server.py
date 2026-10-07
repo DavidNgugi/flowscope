@@ -101,7 +101,10 @@ class VideoSummary(BaseModel):
     youtube_url: str = Field(description="Original URL submitted.")
     title: str | None = Field(default=None, description="Video title once downloaded.")
     channel: str | None = Field(default=None)
-    duration_seconds: int | None = Field(default=None)
+    # yt-dlp reports a duration that is an int for some videos and a float
+    # for others (e.g. 119.211247). Declaring `int` makes Pydantic reject the
+    # float case outright, which failed every listing that contained one.
+    duration_seconds: float | None = Field(default=None)
     status: str | None = Field(default=None, description="Latest job status, e.g. 'done', 'error'.")
     transcript_source: str | None = Field(
         default=None, description="'official_caption', 'auto_caption' or 'whisper'."
@@ -175,7 +178,10 @@ class ReportResult(BaseModel):
     title: str | None = Field(default=None)
     channel: str | None = Field(default=None)
     youtube_url: str = Field(default="")
-    duration_seconds: int | None = Field(default=None)
+    # yt-dlp reports a duration that is an int for some videos and a float
+    # for others (e.g. 119.211247). Declaring `int` makes Pydantic reject the
+    # float case outright, which failed every listing that contained one.
+    duration_seconds: float | None = Field(default=None)
     transcript_source: str | None = Field(default=None)
     status: str | None = Field(default=None, description="Latest job status.")
     screen_count: int = Field(default=0, description="Number of distinct screens analysed.")

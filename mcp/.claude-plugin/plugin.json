@@ -1,7 +1,7 @@
 {
   "name": "flowscope",
   "description": "Turn recorded product demos into structured UX flow reports. Wraps the FlowScope backend as an MCP server and bundles skills for tearing down and comparing product walkthroughs.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "David Ngugi",
     "url": "https://github.com/DavidNgugi/flowscope"

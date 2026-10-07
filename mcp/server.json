@@ -3,7 +3,7 @@
   "name": "io.github.DavidNgugi/flowscope",
   "title": "FlowScope UX Flow Analyser",
   "description": "Turn YouTube product demos into structured UX flow reports, and compare demos side by side.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "url": "https://github.com/DavidNgugi/flowscope",
     "source": "github",
@@ -15,7 +15,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "flowscope-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

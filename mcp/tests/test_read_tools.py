@@ -347,3 +347,69 @@ def test_the_jpeg_fixture_is_a_real_jpeg() -> None:
     assert b"JFIF" in TINY_JPEG[:24]
     # A quantisation table must follow, or no decoder will accept it.
     assert b"\xff\xdb" in TINY_JPEG
+
+
+async def test_list_videos_accepts_fractional_durations(
+    client: Client, backend: MockBackend
+) -> None:
+    """Regression: a float duration crashed every listing that contained one.
+
+    The backend stores whatever yt-dlp reported, which is an int for some videos
+    and a float for others. Declaring `duration_seconds: int` made Pydantic
+    reject the float case, so `flowscope_list_videos` raised instead of
+    listing -- hit against a real library where 4 of 6 videos had float values.
+    """
+    backend.listed_videos = [
+        {
+            "id": VIDEO_ID,
+            "youtube_id": "dQw4w9WgXcQ",
+            "youtube_url": "https://youtube.com/watch?v=dQw4w9WgXcQ",
+            "title": "Float duration",
+            "channel": "Acme",
+            "duration_seconds": 119.211247,  # the exact value the live backend returned
+            "transcript_source": "whisper",
+            "job_status": "done",
+            "job_error": None,
+        },
+        {
+            "id": "vid_second",
+            "youtube_id": "abc",
+            "youtube_url": "https://youtube.com/watch?v=abc",
+            "title": "Integer duration",
+            "channel": "Acme",
+            "duration_seconds": 334,
+            "transcript_source": "whisper",
+            "job_status": "done",
+            "job_error": None,
+        },
+    ]
+
+    result = await client.call_tool("flowscope_list_videos", {})
+
+    assert result.is_error is False, f"listing failed: {result.content[0].text[:200]}"
+    durations = [v["duration_seconds"] for v in result.structured_content["videos"]]
+    assert durations == [119.211247, 334.0]
+
+
+async def test_report_accepts_a_fractional_duration(client: Client, backend: MockBackend) -> None:
+    """`flowscope_get_report` reads the same field and had the same bug."""
+    import httpx2
+    from mcp import Client as MCPClient
+
+    from flowscope_mcp.server import build_server
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == f"/api/videos/{VIDEO_ID}":
+            from .conftest import detail_payload
+
+            body = detail_payload("done")
+            body["video"]["duration_seconds"] = 95.898413
+            return httpx2.Response(200, json=body)
+        return backend.handle(request)
+
+    server = build_server(transport=httpx2.MockTransport(handler))
+    async with MCPClient(server, raise_exceptions=True) as probe:
+        result = await probe.call_tool("flowscope_get_report", {"video_id": VIDEO_ID})
+
+    assert result.is_error is False, result.content[0].text[:200]
+    assert result.structured_content["duration_seconds"] == 95.898413
