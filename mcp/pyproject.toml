@@ -44,6 +44,9 @@ dev = [
   # tests parse the workflow YAML to pin the release triggers.
   "pyyaml>=6.0",
   "ruff>=0.6",
+  # Builds the wheel and sdist. Declared here rather than installed ad hoc so
+  # the local workflow and the CI composite action run identical commands.
+  "build>=1.2",
 ]
 
 [project.urls]

@@ -287,3 +287,108 @@ def test_the_composite_action_validates_the_wheel_contents() -> None:
     steps = yaml.safe_load((REPO_ROOT / ".github/actions/verify-mcp/action.yml").read_text())
     runs = " ".join(step.get("run", "") for step in steps["runs"]["steps"])
     assert "validate_metadata.py --dist-dir dist" in runs
+
+
+# ---- CI tooling must be declared, not assumed ------------------------------
+#
+# `python -m build` failed in CI on the first release because `build` was
+# installed by hand locally and never declared. Anything the workflows invoke
+# has to be a declared dependency or installed by an explicit step.
+
+
+def _run_commands(workflow_or_action: dict) -> list[tuple[str, str]]:
+    """Yield (job_or_step, first-command-word) for every `run:` shell line."""
+    found: list[tuple[str, str]] = []
+    jobs = workflow_or_action.get("jobs")
+    containers = jobs.values() if jobs else [workflow_or_action.get("runs", {})]
+    for container in containers:
+        for step in container.get("steps", []):
+            script = step.get("run")
+            if not script:
+                continue
+            label = step.get("name") or step.get("uses") or "step"
+            for raw in script.splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or line.startswith("-"):
+                    continue
+                if line.endswith("\\") or "=" in line.split()[0]:
+                    continue
+                tokens = line.split()
+                head = tokens[0]
+                # `python -m mod` is a module invocation, not a binary on PATH.
+                if head in {"python", "python3"} and len(tokens) > 1 and tokens[1] == "-m":
+                    found.append((label, f"python -m {tokens[2]}"))
+                else:
+                    found.append((label, head))
+    return found
+
+
+def _declared_dev_requirements() -> set[str]:
+    import tomllib
+
+    pyproject = tomllib.loads((PACKAGE_ROOT / "pyproject.toml").read_text())
+    names = set()
+    for requirement in pyproject["project"]["optional-dependencies"]["dev"]:
+        # Strip any version specifier or extras.
+        name = requirement.split(">=")[0].split("==")[0].split("[")[0].split(">")[0]
+        names.add(name.strip().lower())
+    return names
+
+
+def test_every_tool_the_verify_action_runs_is_available() -> None:
+    """A missing tool fails the release *after* it has started.
+
+    Tools provided by the runner image, installed by an explicit step, or run
+    through a package manager are exempt; anything else must be a declared dev
+    dependency.
+    """
+    action = yaml.safe_load((REPO_ROOT / ".github/actions/verify-mcp/action.yml").read_text())
+    declared = _declared_dev_requirements()
+
+    # Preinstalled on GitHub's image, provided by another step, or a shell
+    # keyword rather than a tool.
+    provided_elsewhere = {
+        "pip",  # preinstalled
+        "curl",  # preinstalled
+        "python",
+        "python3",
+        "npx",  # provided by actions/setup-node
+        "skills-ref",  # installed by the preceding explicit step
+        # shell keywords and builtins
+        "for", "do", "done", "if", "then", "fi", "else", "set", "export",
+        "echo", "cd", "test", "case", "esac", "while",
+    }
+
+    missing = []
+    for label, tool in _run_commands(action):
+        if tool.startswith("python -m "):
+            module = tool.split()[-1]
+            if module == "build" and "build" not in declared:
+                missing.append((label, "build (via `python -m build`)"))
+            continue
+        head = tool.lstrip("./")
+        if head in provided_elsewhere or head in declared:
+            continue
+        missing.append((label, tool))
+
+    assert not missing, (
+        "the verify action invokes tools that are neither declared in "
+        f"[project.optional-dependencies].dev nor installed by a step: {missing}"
+    )
+
+
+def test_build_is_declared_so_ci_can_package() -> None:
+    """Regression: the first release failed on `No module named build`."""
+    assert "build" in _declared_dev_requirements(), (
+        "`build` must be a dev dependency; the verify action runs `python -m build`"
+    )
+
+
+def test_release_publishing_jobs_install_their_own_tools() -> None:
+    """The publishing jobs must not assume the verify job's environment."""
+    source = (WORKFLOWS / "release.yml").read_text()
+    # PyPI publishing uses uv, which the job installs via setup-uv.
+    assert "astral-sh/setup-uv" in source
+    # The registry job installs the publisher binary itself.
+    assert "mcp-publisher" in source
+    assert "pip install" in source or "setup-python" in source
