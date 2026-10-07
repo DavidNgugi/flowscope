@@ -1,5 +1,7 @@
 # FlowScope
 
+[![CI](https://img.shields.io/github/actions/workflow/status/DavidNgugi/flowscope/mcp.yml?branch=main&logo=github&label=CI)](https://github.com/DavidNgugi/flowscope/actions/workflows/mcp.yml) [![release](https://img.shields.io/github/actions/workflow/status/DavidNgugi/flowscope/release.yml?branch=main&logo=github&label=release)](https://github.com/DavidNgugi/flowscope/actions/workflows/release.yml) [![PyPI](https://img.shields.io/pypi/v/flowscope-mcp?logo=pypi&logoColor=white&label=flowscope-mcp)](https://pypi.org/project/flowscope-mcp/) [![Python](https://img.shields.io/pypi/pyversions/flowscope-mcp?logo=python&logoColor=white)](https://pypi.org/project/flowscope-mcp/) [![License: MIT](https://img.shields.io/github/license/DavidNgugi/flowscope)](LICENSE) [![tag](https://img.shields.io/github/v/tag/DavidNgugi/flowscope?logo=git&logoColor=white&label=tag)](https://github.com/DavidNgugi/flowscope/releases) [![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.DavidNgugi%2Fflowscope-1f6feb)](https://registry.modelcontextprotocol.io/v0.1/servers?search=flowscope)
+
 Given one or more YouTube product-demo URLs, FlowScope downloads the video, transcribes it (captions or local Whisper), extracts and deduplicates representative screenshots of distinct screens, aligns them to the narration, and uses an LLM to produce a structured breakdown of the product's flow, screens, and UX patterns — plus cross-video comparison.
 
 For personal competitive UX research use. Downloaded videos and derived analysis stay local.

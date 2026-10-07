@@ -2,8 +2,16 @@
 
 <!-- mcp-name: io.github.DavidNgugi/flowscope -->
 
+[![PyPI](https://img.shields.io/pypi/v/flowscope-mcp?logo=pypi&logoColor=white&label=PyPI)](https://pypi.org/project/flowscope-mcp/) [![Python](https://img.shields.io/pypi/pyversions/flowscope-mcp?logo=python&logoColor=white)](https://pypi.org/project/flowscope-mcp/) [![License: MIT](https://img.shields.io/pypi/l/flowscope-mcp)](../LICENSE) [![CI](https://img.shields.io/github/actions/workflow/status/DavidNgugi/flowscope/mcp.yml?branch=main&logo=github&label=CI)](https://github.com/DavidNgugi/flowscope/actions/workflows/mcp.yml) [![release](https://img.shields.io/github/actions/workflow/status/DavidNgugi/flowscope/release.yml?branch=main&logo=github&label=release)](https://github.com/DavidNgugi/flowscope/actions/workflows/release.yml) [![tag](https://img.shields.io/github/v/tag/DavidNgugi/flowscope?logo=git&logoColor=white&label=tag)](https://github.com/DavidNgugi/flowscope/releases) [![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.DavidNgugi%2Fflowscope-1f6feb)](https://registry.modelcontextprotocol.io/v0.1/servers?search=flowscope)
+
 An [MCP](https://modelcontextprotocol.io) server that exposes the
-[FlowScope](../README.md) UX-analysis pipeline to any LLM client.
+[FlowScope](../README.md) UX-analysis pipeline to any LLM client. Speaks MCP
+protocol `2026-07-28` and ships two spec-portable
+[Agent Skills](https://agentskills.io).
+
+```bash
+uvx flowscope-mcp        # stdio server; needs a local FlowScope backend
+```
 
 FlowScope takes a YouTube product-demo URL, downloads the video, transcribes it,
 extracts and de-duplicates screenshots of each distinct screen, describes every

@@ -537,3 +537,110 @@ def test_repository_urls_use_the_same_owner_casing(server_json: dict) -> None:
             assert f"github.com/{owner.lower()}/" not in text, (
                 f"{doc.name} contains a lowercase GitHub URL while the namespace uses {owner!r}"
             )
+
+
+# ---- README badges ---------------------------------------------------------
+#
+# Badges are the first thing a visitor sees and the easiest thing to get subtly
+# wrong: a wrong owner casing, a stale distribution name, or a workflow file
+# that does not exist all render as a broken or misleading badge.
+
+
+def _badge_urls(text: str) -> list[str]:
+    import re
+
+    return re.findall(r"!\[[^\]]*\]\((https?://[^)]+)\)", text)
+
+
+def test_readmes_have_a_badge_block() -> None:
+    """Standard open-source presentation: status at a glance before prose."""
+    for doc in [REPO_ROOT / "README.md", PACKAGE_ROOT / "README.md"]:
+        badges = _badge_urls(doc.read_text())
+        assert len(badges) >= 4, f"{doc.name} has only {len(badges)} badges"
+
+
+def test_github_badges_use_the_correct_owner_casing() -> None:
+    """The registry bug in a different place: casing must match the account."""
+    for doc in [REPO_ROOT / "README.md", PACKAGE_ROOT / "README.md"]:
+        text = doc.read_text()
+        for url in _badge_urls(text):
+            if "github.com/" not in url and "github/" not in url:
+                continue
+            assert "DavidNgugi" in url or "%2Fflowscope" in url, (
+                f"{doc.name} badge {url!r} does not use the canonical owner casing"
+            )
+            assert "davidngugi" not in url, (
+                f"{doc.name} badge {url!r} uses a lowercase owner; badges are case-sensitive"
+            )
+
+
+def test_badges_reference_the_real_pypi_distribution() -> None:
+    for doc in [REPO_ROOT / "README.md", PACKAGE_ROOT / "README.md"]:
+        for url in _badge_urls(doc.read_text()):
+            if "img.shields.io/pypi/" not in url:
+                continue
+            assert "/flowscope-mcp" in url, f"{doc.name} badge {url!r} names the wrong distribution"
+
+
+def test_badges_reference_workflow_files_that_exist() -> None:
+    """A renamed workflow would silently kill the CI badge."""
+    import re
+
+    for doc in [REPO_ROOT / "README.md", PACKAGE_ROOT / "README.md"]:
+        for url in _badge_urls(doc.read_text()):
+            match = re.search(r"workflow/status/[^/]+/[^/]+/([^?]+)", url)
+            if not match:
+                continue
+            workflow = REPO_ROOT / ".github" / "workflows" / match.group(1)
+            assert workflow.exists(), f"{doc.name} badge points at a missing workflow: {match.group(1)}"
+
+
+def test_every_badge_links_somewhere() -> None:
+    """A badge with no link is decoration; each should lead to its evidence."""
+    import re
+
+    for doc in [REPO_ROOT / "README.md", PACKAGE_ROOT / "README.md"]:
+        text = doc.read_text()
+        for badge in re.finditer(r"\[!\[[^\]]*\]\((https?://[^)]+)\)\]\(([^)]+)\)", text):
+            target = badge.group(2)
+            assert target.startswith(("http://", "https://", "#")) or (doc.parent / target).exists(), (
+                f"{doc.name}: badge {badge.group(1)!r} links to a missing target {target!r}"
+            )
+
+
+def test_no_downloads_badge_while_the_package_is_new() -> None:
+    """A downloads badge reads 'package not found' until PyPI has statistics.
+
+    It looks broken rather than modest, so it is deliberately absent until there
+    is enough history to be meaningful.
+    """
+    for doc in [REPO_ROOT / "README.md", PACKAGE_ROOT / "README.md"]:
+        assert "img.shields.io/pypi/dm/" not in doc.read_text(), (
+            f"{doc.name} shows a download-count badge, which renders as "
+            "'package not found' for a newly published package"
+        )
+
+
+def test_badges_sit_on_one_line_so_they_render_horizontally() -> None:
+    """Badges must share a source line, not one per line.
+
+    Markdown treats a single newline as a space, so GitHub flows a one-per-line
+    block horizontally -- but renderers that treat a newline as a line break
+    (several editors, some README viewers) stack them vertically. Keeping every
+    badge on one line renders horizontally everywhere.
+    """
+    import re
+
+    for doc in [REPO_ROOT / "README.md", PACKAGE_ROOT / "README.md"]:
+        lines = doc.read_text().splitlines()
+        badge_lines = [i for i, line in enumerate(lines, 1) if re.match(r"^\s*\[!\[", line)]
+        assert badge_lines, f"{doc.name} has no badge line"
+        assert len(badge_lines) == 1, (
+            f"{doc.name}: badges are spread over {len(badge_lines)} lines "
+            f"(lines {badge_lines}). Put them all on one line separated by single "
+            "spaces so every renderer shows one horizontal row."
+        )
+        oneline = lines[badge_lines[0] - 1]
+        assert oneline.count("![") >= 4, f"{doc.name} badge line has too few badges"
+        # Single spaces between badges, not multiple or a line break.
+        assert "  " not in oneline, f"{doc.name} badge line contains double spaces"
