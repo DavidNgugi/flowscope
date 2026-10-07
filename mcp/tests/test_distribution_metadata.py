@@ -644,3 +644,39 @@ def test_badges_sit_on_one_line_so_they_render_horizontally() -> None:
         assert oneline.count("![") >= 4, f"{doc.name} badge line has too few badges"
         # Single spaces between badges, not multiple or a line break.
         assert "  " not in oneline, f"{doc.name} badge line contains double spaces"
+
+
+def test_branch_filtered_badges_target_workflows_that_run_on_branches() -> None:
+    """A `?branch=` filter on a tag-only workflow renders as 'no status'.
+
+    `release.yml` triggers only on version tags, so GitHub has no run for a
+    branch and the badge shows nothing useful. Badges for such workflows must
+    omit the branch filter and report the latest run instead.
+    """
+    import re
+
+    tag_only_workflows = {"release.yml"}
+    for doc in [REPO_ROOT / "README.md", PACKAGE_ROOT / "README.md"]:
+        for url in _badge_urls(doc.read_text()):
+            match = re.search(r"workflow/status/[^/]+/[^/]+/([^?]+)\?[^)]*branch=", url)
+            if not match:
+                continue
+            workflow = match.group(1)
+            assert workflow not in tag_only_workflows, (
+                f"{doc.name} filters the {workflow} badge by branch, but that workflow "
+                "only runs on tags, so the badge renders 'no status'. Drop ?branch=."
+            )
+
+
+def test_every_badge_url_is_well_formed() -> None:
+    """Catch a truncated or malformed badge URL before it renders as a broken image."""
+
+    for doc in [REPO_ROOT / "README.md", PACKAGE_ROOT / "README.md"]:
+        for url in _badge_urls(doc.read_text()):
+            assert url.startswith("https://img.shields.io/"), f"{doc.name}: {url!r}"
+            assert " " not in url, f"{doc.name}: badge URL contains a space: {url!r}"
+            assert url.count("(") == url.count(")") == 0, f"{doc.name}: unbalanced parens in {url!r}"
+            # shields.io path badges must carry a label and message separated by `-`.
+            if "/badge/" in url:
+                payload = url.split("/badge/", 1)[1].split("?")[0]
+                assert "-" in payload, f"{doc.name}: static badge {url!r} has no message"
