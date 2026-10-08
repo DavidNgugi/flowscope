@@ -175,6 +175,12 @@ export interface HealthStatus {
   yt_dlp_available: boolean
   anthropic_key_present: boolean
   anthropic_model: string
+  llm_providers_available: string[]
+  llm_provider: string
+  llm_model: string
+  llm_vision_model: string
+  llm_synthesis_model: string
+  llm_comparison_model: string
 }
 
 export interface ComparisonResult {
