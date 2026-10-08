@@ -4,6 +4,9 @@ uvicorn[standard]>=0.32
 # without it video downloads fail with HTTP 403.
 yt-dlp[default,curl-cffi]>=2026.8.19
 faster-whisper>=1.0.3
+# faster-whisper 1.2.1 still passes metadata_errors= to av.open(); PyAV >= 15
+# removed it. 13.1.0 is the newest av with binary wheels that accepts it.
+av==13.1.0
 anthropic>=0.40
 imagehash>=4.3.1
 pillow>=10.4
