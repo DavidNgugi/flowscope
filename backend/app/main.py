@@ -9,6 +9,7 @@ from app.api import comparisons, health, videos
 from app.config import settings
 from app.db import db
 from app.deps import check_ffmpeg, check_yt_dlp, shutdown_executors
+from app.llm.registry import get_registry
 from app.ws import routes as ws_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -30,13 +31,15 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("yt-dlp OK")
 
-    if not settings.anthropic_api_key:
+    try:
+        vision = get_registry().resolve("vision")
+        logger.info("Screen analysis ready (%s)", vision.describe())
+    except Exception as exc:
         logger.warning(
-            "ANTHROPIC_API_KEY not set -- downloads/transcription still work, "
-            "but frame analysis jobs will fail. Add it to backend/.env and restart."
+            "%s -- downloads/transcription still work, but new analysis jobs "
+            "will be rejected at submit. Update backend/.env and restart.",
+            exc,
         )
-    else:
-        logger.info("Anthropic API key present (model=%s)", settings.anthropic_model)
 
     from app.jobs.manager import job_manager
 
