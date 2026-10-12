@@ -9,7 +9,6 @@ in a later change).
 
 import logging
 
-from app.config import settings
 from app.db import db
 from app.jobs.manager import JobContext
 from app.jobs.stages.align import align_frames_to_transcript
@@ -20,6 +19,7 @@ from app.jobs.stages.scenes import detect_scene_timestamps, extract_candidate_fr
 from app.jobs.stages.synthesis import synthesize_video
 from app.jobs.stages.transcribe import transcribe_with_whisper
 from app.jobs.stages.vision_analysis import analyze_frames
+from app.llm.registry import get_registry
 from app.models import JobStatus
 
 logger = logging.getLogger("flowscope.pipeline")
@@ -96,11 +96,10 @@ async def run_pipeline(ctx: JobContext) -> None:
                 existing_excerpt_updates,
             )
 
-    # --- vision analysis (Claude) ---
-    if not settings.anthropic_api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not set -- add it to backend/.env and restart to run frame analysis."
-        )
+    # --- vision analysis (provider-neutral) ---
+    # A bare resolve is the gate: it raises ProviderNotConfigured, naming the
+    # env var to set for whichever provider this purpose selected.
+    get_registry().resolve("vision")
 
     analyzed_frame_ids = {
         row["frame_id"]

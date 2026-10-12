@@ -66,6 +66,21 @@ def test_missing_key_names_the_env_var() -> None:
     assert "DEEPSEEK_API_KEY" in str(excinfo.value)
 
 
+def test_vision_without_any_configuration_says_what_to_set() -> None:
+    # Fresh install, no keys: the vision gate (pipeline + submit validation)
+    # surfaces this message instead of demanding a specific vendor's key.
+    registry = ModelRegistry(make_settings(llm_provider="openai", llm_model="", openai_api_key=""))
+    with pytest.raises(ProviderNotConfigured) as excinfo:
+        registry.resolve("vision")
+    assert "LLM_MODEL" in str(excinfo.value)
+
+
+def test_openai_only_setup_resolves_vision_without_an_anthropic_key() -> None:
+    # The live-test scenario: pipeline must not gate on ANTHROPIC_API_KEY.
+    registry = ModelRegistry(make_settings(anthropic_api_key=""))
+    assert registry.resolve("vision").describe() == "openai/gpt-5-mini"
+
+
 def test_available_lists_only_configured_providers() -> None:
     registry = ModelRegistry(make_settings(deepseek_api_key="test-deepseek"))
     assert registry.available() == ["deepseek", "openai"]

@@ -12,6 +12,8 @@ from app.jobs.manager import job_manager
 from app.jobs.stages.align import align_frames_to_transcript
 from app.jobs.stages.download import extract_youtube_id
 from app.jobs.stages.transcript import normalize_transcript_segments
+from app.llm.registry import get_registry
+from app.llm.types import ProviderNotConfigured
 from app.llm.usage import video_usage_history
 from app.models import JobStatus, new_id, utcnow_iso
 from app.schemas import SubmitVideosRequest, SubmitVideosResponseItem
@@ -23,6 +25,12 @@ router = APIRouter()
 
 @router.post("/videos", response_model=list[SubmitVideosResponseItem])
 async def submit_videos(payload: SubmitVideosRequest) -> list[SubmitVideosResponseItem]:
+    # Reject unrunnable jobs here so failure never comes after the free stages.
+    try:
+        get_registry().resolve("vision")
+    except ProviderNotConfigured as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     results: list[SubmitVideosResponseItem] = []
 
     for url in payload.urls:
